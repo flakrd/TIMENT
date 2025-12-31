@@ -11,6 +11,17 @@
         font-family: 'Inter', sans-serif;
         background-color: #f3f4f6;
       }
+      
+      @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-8px); }
+      }
+      @keyframes drift {
+        0% { transform: translateX(0); }
+        100% { transform: translateX(-30px); }
+      }
+      .animate-float { animation: float 6s ease-in-out infinite; }
+      .animate-drift { animation: drift 15s linear infinite alternate; }
     </style>
   <script type="importmap">
 {

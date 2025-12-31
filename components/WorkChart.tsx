@@ -1,5 +1,6 @@
+
 import React, { useMemo, useState } from 'react';
-import { isWorkDay } from '../utils/dateHelpers';
+import { isWorkDay, getDailyWorkHours } from '../utils/dateHelpers';
 import { WorkConfig } from '../constants';
 
 interface WorkChartProps {
@@ -31,8 +32,9 @@ const WorkChart: React.FC<WorkChartProps> = ({ startDate, endDate, now, config }
 
     while (iter <= endDate) {
       const isWorking = isWorkDay(iter, config);
-      // We plot the point at the END of the work day for visualization
-      const dayWorkHours = isWorking ? (config.endHour - config.startHour) : 0;
+      // Determine specific hours for this day
+      const { start, end } = getDailyWorkHours(iter, config);
+      const dayWorkHours = isWorking ? (end - start) : 0;
       
       cumulativeHours += dayWorkHours;
       

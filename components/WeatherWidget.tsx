@@ -6,9 +6,10 @@ interface WeatherWidgetProps {
     weather: WeatherData | null;
     loading: boolean;
     onRetry: () => void;
+    isRestMode: boolean; // Received from App
 }
 
-const WeatherWidget: React.FC<WeatherWidgetProps> = ({ weather, loading, onRetry }) => {
+const WeatherWidget: React.FC<WeatherWidgetProps> = ({ weather, loading, onRetry, isRestMode }) => {
   const [isOpen, setIsOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -26,21 +27,21 @@ const WeatherWidget: React.FC<WeatherWidgetProps> = ({ weather, loading, onRetry
     const icon = WEATHER_CODES[h.weatherCode]?.icon || '❓';
     return (
         <div key={h.time} className="flex flex-col items-center min-w-[3.5rem] p-2 first:pl-0">
-            <span className="text-[10px] font-bold text-gray-400 mb-1">{h.formattedTime}</span>
-            <div className="bg-slate-50 border border-slate-100 rounded-xl p-2 flex flex-col items-center w-full shadow-sm">
+            <span className={`text-[10px] font-bold mb-1 ${isRestMode ? 'text-slate-500' : 'text-gray-400'}`}>{h.formattedTime}</span>
+            <div className={`rounded-xl p-2 flex flex-col items-center w-full shadow-sm border ${isRestMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
                 <span className="text-xl mb-1">{icon}</span>
-                <span className="text-xs font-bold text-slate-700">{Math.round(h.temperature)}°</span>
+                <span className={`text-xs font-bold ${isRestMode ? 'text-slate-200' : 'text-slate-700'}`}>{Math.round(h.temperature)}°</span>
             </div>
         </div>
     );
   };
 
-  if (loading) return <div className="animate-pulse h-12 w-32 bg-white/40 rounded-xl"></div>;
+  if (loading) return <div className={`animate-pulse h-12 w-32 rounded-xl ${isRestMode ? 'bg-slate-800' : 'bg-white/40'}`}></div>;
 
   if (!weather) return (
-      <div className="flex items-center gap-2 bg-red-50 px-3 py-2 rounded-xl border border-red-200 shadow-sm text-red-600 cursor-pointer" onClick={onRetry}>
+      <div className="flex items-center gap-2 bg-red-900/20 px-3 py-2 rounded-xl border border-red-800 shadow-sm text-red-400 cursor-pointer" onClick={onRetry}>
         <span className="text-xl">⚠️</span>
-        <span className="text-xs font-bold">Reintentar Clima</span>
+        <span className="text-xs font-bold">Error Clima</span>
       </div>
   );
 
@@ -48,77 +49,46 @@ const WeatherWidget: React.FC<WeatherWidgetProps> = ({ weather, loading, onRetry
     <div className="relative" ref={wrapperRef}>
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-3 bg-white/80 backdrop-blur-md px-4 py-2 rounded-xl border border-white/50 shadow-lg shadow-indigo-500/10 transition-all hover:scale-105 hover:bg-white group ${isOpen ? 'ring-2 ring-indigo-400 bg-white' : ''}`}
+        className={`flex items-center gap-3 backdrop-blur-md px-4 py-2 rounded-xl border shadow-lg transition-all hover:scale-105 group ${isRestMode ? 'bg-slate-900/80 border-slate-800 text-white shadow-indigo-900/10' : 'bg-white/80 border-white/50 text-slate-800 shadow-indigo-500/10'} ${isOpen ? 'ring-2 ring-indigo-500' : ''}`}
       >
-        <span className="text-3xl filter drop-shadow-sm group-hover:animate-bounce" role="img" aria-label={weather.weatherLabel}>
+        <span className="text-3xl filter drop-shadow-md group-hover:rotate-12 transition-transform">
             {weather.weatherIcon}
         </span>
         <div className="flex flex-col items-start text-left">
           <div className="flex items-baseline gap-1">
-             <span className="text-xl font-black text-gray-800 leading-none">{weather.temperature}°</span>
-             <span className="text-[10px] text-gray-400 font-bold uppercase truncate max-w-[100px]">{weather.locationName}</span>
+             <span className="text-xl font-black leading-none">{weather.temperature}°</span>
+             <span className={`text-[9px] font-black uppercase truncate max-w-[80px] ${isRestMode ? 'text-slate-500' : 'text-gray-400'}`}>{weather.locationName.split(' ')[0]}</span>
           </div>
-          <span className="text-[10px] text-indigo-500 font-bold uppercase tracking-wide">
-             {isOpen ? 'Cerrar Panel' : 'Ver Detalles'}
+          <span className={`text-[9px] font-black uppercase tracking-widest ${isRestMode ? 'text-indigo-400' : 'text-indigo-600'}`}>
+             {isOpen ? 'Ocultar' : 'Info'}
           </span>
         </div>
       </button>
 
-      {/* Expanded Panel */}
       {isOpen && (
-        <div className="absolute right-0 mt-3 w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 p-0 z-50 animate-in fade-in zoom-in-95 duration-200 origin-top-right ring-1 ring-black/5 overflow-hidden">
-            
-            {/* Header / Location Status */}
-            <div className="bg-slate-50 px-5 py-3 border-b border-slate-100 flex justify-between items-center">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Pronóstico Local</span>
-                <span className="text-[9px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold">Córdoba Capital</span>
+        <div className={`absolute right-0 mt-4 w-80 rounded-2xl shadow-3xl border z-50 animate-in fade-in zoom-in-95 duration-300 origin-top-right overflow-hidden ${isRestMode ? 'bg-slate-900 border-slate-800 ring-1 ring-white/10' : 'bg-white border-gray-200 ring-1 ring-black/5'}`}>
+            <div className={`px-5 py-3 border-b flex justify-between items-center ${isRestMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
+                <span className={`text-[10px] font-black uppercase tracking-widest ${isRestMode ? 'text-slate-500' : 'text-slate-400'}`}>Pronóstico local</span>
+                <span className={`text-[9px] px-2 py-0.5 rounded-full font-black ${isRestMode ? 'bg-indigo-900/50 text-indigo-400' : 'bg-indigo-100 text-indigo-700'}`}>CÓRDOBA</span>
             </div>
 
             <div className="p-5 space-y-6">
-                
-                {/* Recommendation Card */}
-                <div className={`rounded-xl p-4 flex items-start gap-4 border ${weather.recommendation.color.replace('text', 'border').replace('bg', 'border')}/20 ${weather.recommendation.color.split(' ')[0]}`}>
-                    <div className="text-3xl bg-white/50 p-2 rounded-full shadow-sm">
-                        {weather.recommendation.icon}
-                    </div>
+                <div className={`rounded-2xl p-4 flex items-start gap-4 border ${isRestMode ? 'bg-indigo-900/20 border-indigo-800 text-indigo-100' : weather.recommendation.color + ' border-indigo-100'}`}>
+                    <div className="text-3xl p-2 bg-white/10 rounded-full">{weather.recommendation.icon}</div>
                     <div>
-                        <h4 className={`font-bold text-sm mb-1 ${weather.recommendation.color.split(' ')[1]}`}>
-                            {weather.recommendation.title}
-                        </h4>
-                        <p className="text-xs text-slate-700 leading-relaxed font-medium">
-                            {weather.recommendation.activity}
-                        </p>
+                        <h4 className="font-black text-sm mb-1 uppercase tracking-tight">{weather.recommendation.title}</h4>
+                        <p className={`text-xs leading-relaxed ${isRestMode ? 'text-slate-300' : 'text-slate-700'}`}>{weather.recommendation.activity}</p>
                     </div>
                 </div>
 
-                {/* Timeline: Work */}
-                {weather.workForecast.length > 0 && (
-                    <div>
-                        <h5 className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-3 flex items-center gap-2">
-                            <span>💼</span> Durante la Jornada
-                            <span className="h-px flex-1 bg-amber-100"></span>
-                        </h5>
-                        <div className="flex overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-200">
-                            {weather.workForecast.map(renderTimelineItem)}
-                        </div>
-                    </div>
-                )}
-
-                {/* Timeline: After Work */}
-                <div>
-                    <h5 className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mb-3 flex items-center gap-2">
-                        <span>🏠</span> Post-Trabajo
-                        <span className="h-px flex-1 bg-indigo-100"></span>
+                <div className="space-y-4">
+                    <h5 className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${isRestMode ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                        <span>🕒</span> Línea de Tiempo
                     </h5>
-                    {weather.afterWorkForecast.length > 0 ? (
-                        <div className="flex overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-200">
-                            {weather.afterWorkForecast.map(renderTimelineItem)}
-                        </div>
-                    ) : (
-                        <p className="text-xs text-slate-400 italic">No hay datos para el resto del día.</p>
-                    )}
+                    <div className="flex overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-indigo-500/20">
+                        {[...weather.workForecast, ...weather.afterWorkForecast].slice(0, 8).map(renderTimelineItem)}
+                    </div>
                 </div>
-
             </div>
         </div>
       )}

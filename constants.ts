@@ -1,45 +1,74 @@
-// Configuración de Zona Horaria y Fechas
+
 export const TIMEZONE = 'America/Argentina/Cordoba';
-export const VACATION_DATE_STR = "2026-01-12T00:00:00"; // ISO format for easier parsing
+export const VACATION_DATE_STR = "2026-01-12T00:00:00";
+
+export type BackgroundTheme = 'minimal' | 'dynamic' | 'geometric' | 'custom';
 
 export interface WorkConfig {
   startHour: number;
   endHour: number;
-  workDays: number[]; // 0=Sunday, 6=Saturday
+  workDays: number[]; // 0=Domingo, 6=Sábado
+  sleepGoal: number; // Horas de sueño deseadas
+  // Horarios por día de semana (Indice 0-6 -> {start, end})
+  customSchedule?: Record<number, { start: number, end: number }>;
+  // Nuevo: Horarios por fecha específica ("YYYY-MM-DD" -> {start, end})
+  dateExceptions?: Record<string, { start: number, end: number }>;
+  // Nuevo: Tema de fondo
+  backgroundTheme: BackgroundTheme;
+  // Nuevo: Imagen de fondo personalizada (base64)
+  customBackgroundImage?: string;
 }
 
 export const DEFAULT_WORK_CONFIG: WorkConfig = {
   startHour: 9,
   endHour: 17,
-  workDays: [1, 2, 3, 4, 5] // Lunes a Viernes
+  workDays: [1, 2, 3, 4, 5], // Lunes a Viernes
+  sleepGoal: 8,
+  customSchedule: {},
+  dateExceptions: {},
+  backgroundTheme: 'minimal',
+  customBackgroundImage: undefined
 };
 
-// Deprecated constants kept for backward compatibility if needed, but should use config
-export const WORK_START_HOUR = 9;
-export const WORK_END_HOUR = 17;
+// Configuración de Módulos (UI)
+export type ModuleId = 'week' | 'tracker' | 'month' | 'year' | 'countdown' | 'ai' | 'nano';
+export type ModuleSize = 'normal' | 'wide'; // normal = 1 col, wide = 2 cols (full width)
 
-// Feriados Argentina 2025 (Confirmados e Inamovibles/Trasladables estimados)
-// Formato: MM-DD
+export interface UIConfig {
+  leftColumn: ModuleId[];
+  rightColumn: ModuleId[];
+  titles: Record<ModuleId, string>;
+  sizes: Record<ModuleId, ModuleSize>;
+}
+
+export const DEFAULT_UI_CONFIG: UIConfig = {
+  leftColumn: ['week', 'tracker'],
+  rightColumn: ['month', 'year', 'countdown', 'ai', 'nano'],
+  titles: {
+    week: 'Esta Semana',
+    tracker: 'Rastreador',
+    month: 'Este Mes',
+    year: 'Año 2025',
+    countdown: 'Vacaciones',
+    ai: 'Chatbot Gemini 3',
+    nano: 'Nano Banana Studio'
+  },
+  sizes: {
+    week: 'wide',
+    tracker: 'wide',
+    month: 'wide', 
+    year: 'normal',
+    countdown: 'normal',
+    ai: 'wide',
+    nano: 'wide'
+  }
+};
+
 export const HOLIDAYS_2025 = [
-  '01-01', // Año Nuevo
-  '03-03', // Carnaval
-  '03-04', // Carnaval
-  '03-24', // Día de la Memoria (Lunes)
-  '04-02', // Malvinas (Miércoles)
-  '04-18', // Viernes Santo
-  '05-01', // Día del Trabajador
-  '05-25', // Revolución de Mayo
-  '06-16', // Paso a la Inmortalidad de Güemes (Lunes estimado)
-  '06-20', // Paso a la Inmortalidad de Belgrano
-  '07-09', // Independencia
-  '08-17', // Paso a la Inmortalidad de San Martín
-  '10-12', // Día del Respeto a la Diversidad Cultural
-  '11-20', // Día de la Soberanía Nacional
-  '12-08', // Inmaculada Concepción
-  '12-25', // Navidad
+  '01-01', '03-03', '03-04', '03-24', '04-02', '04-18', '05-01', '05-25', 
+  '06-16', '06-20', '07-09', '08-17', '10-12', '11-20', '12-08', '12-25',
 ];
 
-// Mapeo de códigos WMO de Open-Meteo a descripciones y emojis
 export const WEATHER_CODES: Record<number, { label: string, icon: string }> = {
   0: { label: 'Despejado', icon: '☀️' },
   1: { label: 'Mayormente despejado', icon: '🌤️' },
@@ -53,16 +82,7 @@ export const WEATHER_CODES: Record<number, { label: string, icon: string }> = {
   61: { label: 'Lluvia ligera', icon: '🌧️' },
   63: { label: 'Lluvia moderada', icon: '🌧️' },
   65: { label: 'Lluvia fuerte', icon: '⛈️' },
-  71: { label: 'Nieve ligera', icon: '🌨️' },
-  73: { label: 'Nieve moderada', icon: '🌨️' },
-  75: { label: 'Nieve fuerte', icon: '❄️' },
   95: { label: 'Tormenta eléctrica', icon: '⚡' },
-  96: { label: 'Tormenta con granizo', icon: '⛈️' },
-  99: { label: 'Tormenta fuerte', icon: '⛈️' },
 };
 
-export const DAYS_OF_WEEK = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-export const MONTHS = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-];
+export const DAYS_OF_WEEK = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];

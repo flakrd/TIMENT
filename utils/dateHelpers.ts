@@ -1,9 +1,18 @@
+
 import { HOLIDAYS_2025, TIMEZONE, WorkConfig } from '../constants';
 
 export const getCordobaTime = (): Date => {
   const now = new Date();
   const tzDate = new Date(now.toLocaleString('en-US', { timeZone: TIMEZONE }));
   return tzDate;
+};
+
+// Helper to get YYYY-MM-DD key from a date object correctly in local time
+export const getDateKey = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 // Check if a date is a holiday
@@ -14,28 +23,48 @@ export const isHoliday = (date: Date): boolean => {
   return HOLIDAYS_2025.includes(dateStr);
 };
 
-// Check if a date is a weekend (Legacy helper, mostly internal use now)
-export const isWeekend = (date: Date): boolean => {
-  const day = date.getDay();
-  return day === 0 || day === 6;
-};
-
 // Check if a date is a working day based on config
 export const isWorkDay = (date: Date, config: WorkConfig): boolean => {
   if (isHoliday(date)) return false;
+  // Check specific date exception existence (if it exists, it IS a workday unless start==end or something, but usually implies work)
+  const dateKey = getDateKey(date);
+  if (config.dateExceptions && config.dateExceptions[dateKey]) {
+      return true; 
+  }
   return config.workDays.includes(date.getDay());
+};
+
+// NUEVO: Obtener horas específicas con prioridad: Fecha > Día Semana > Global
+export const getDailyWorkHours = (date: Date, config: WorkConfig): { start: number, end: number } => {
+  // 1. Prioridad: Fecha Específica
+  const dateKey = getDateKey(date);
+  if (config.dateExceptions && config.dateExceptions[dateKey]) {
+      return config.dateExceptions[dateKey];
+  }
+
+  // 2. Prioridad: Día de la Semana
+  const dayIndex = date.getDay();
+  if (config.customSchedule && config.customSchedule[dayIndex]) {
+      return config.customSchedule[dayIndex];
+  }
+  
+  // 3. Default Global
+  return { start: config.startHour, end: config.endHour };
 };
 
 // Get the intersection of a time range with the work hours of a specific day
 const getWorkHoursInDay = (day: Date, rangeStart: Date, rangeEnd: Date, config: WorkConfig): number => {
   if (!isWorkDay(day, config)) return 0;
 
+  // NUEVO: Usar horario dinámico
+  const { start, end } = getDailyWorkHours(day, config);
+
   // Define work hours for this specific day
   const workStart = new Date(day);
-  workStart.setHours(config.startHour, 0, 0, 0);
+  workStart.setHours(start, 0, 0, 0);
   
   const workEnd = new Date(day);
-  workEnd.setHours(config.endHour, 0, 0, 0);
+  workEnd.setHours(end, 0, 0, 0);
 
   // Calculate overlap
   const effectiveStart = rangeStart > workStart ? rangeStart : workStart;

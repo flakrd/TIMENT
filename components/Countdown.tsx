@@ -3,32 +3,37 @@ import { getCordobaTime } from '../utils/dateHelpers';
 
 interface CountdownProps {
   targetDate: Date;
+  isRestMode: boolean; // Received from App for potential external styling adaptation
 }
 
-const Countdown: React.FC<CountdownProps> = ({ targetDate }) => {
-  const [timeLeft, setTimeLeft] = useState<{days: number, hours: number, minutes: number, seconds: number} | null>(null);
+const calculateTimeLeft = (target: Date) => {
+  const now = getCordobaTime();
+  const difference = target.getTime() - now.getTime();
+
+  if (difference > 0) {
+    return {
+      days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+      hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
+      minutes: Math.floor((difference / 1000 / 60) % 60),
+      seconds: Math.floor((difference / 1000) % 60),
+    };
+  }
+  return { days: 0, hours: 0, minutes: 0, seconds: 0 };
+};
+
+const Countdown: React.FC<CountdownProps> = React.memo(({ targetDate, isRestMode }) => {
+  // Initialize with the calculation function to avoid 0-state flash
+  const [timeLeft, setTimeLeft] = useState(() => calculateTimeLeft(targetDate));
   const cardRef = useRef<HTMLDivElement>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
-    const calculateTimeLeft = () => {
-      const now = getCordobaTime();
-      const difference = targetDate.getTime() - now.getTime();
+    // Immediate update on prop change
+    setTimeLeft(calculateTimeLeft(targetDate));
 
-      if (difference > 0) {
-        setTimeLeft({
-          days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-          hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
-          minutes: Math.floor((difference / 1000 / 60) % 60),
-          seconds: Math.floor((difference / 1000) % 60),
-        });
-      } else {
-        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-      }
-    };
-
-    calculateTimeLeft();
-    const timer = setInterval(calculateTimeLeft, 1000);
+    const timer = setInterval(() => {
+      setTimeLeft(calculateTimeLeft(targetDate));
+    }, 1000);
 
     return () => clearInterval(timer);
   }, [targetDate]);
@@ -36,7 +41,6 @@ const Countdown: React.FC<CountdownProps> = ({ targetDate }) => {
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!cardRef.current) return;
     const { left, top, width, height } = cardRef.current.getBoundingClientRect();
-    // Calculate mouse position relative to center (-1 to 1)
     const x = ((e.clientX - left) / width - 0.5) * 2;
     const y = ((e.clientY - top) / height - 0.5) * 2;
     setMousePos({ x, y });
@@ -46,43 +50,31 @@ const Countdown: React.FC<CountdownProps> = ({ targetDate }) => {
     setMousePos({ x: 0, y: 0 });
   };
 
-  if (!timeLeft) return null;
+  const isUrgent = timeLeft.days < 7 && (timeLeft.days > 0 || timeLeft.hours > 0 || timeLeft.minutes > 0);
 
-  const isUrgent = timeLeft.days < 7;
+  // Blend with RestMode: Adds a subtle border or glow if in rest mode to match other widgets
+  const containerClasses = isRestMode 
+    ? 'ring-1 ring-white/10 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.5)]'
+    : 'shadow-xl';
 
   return (
     <div 
         ref={cardRef}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        className={`relative overflow-hidden rounded-xl p-6 text-white shadow-xl transform transition-all duration-300 group ${isUrgent ? 'ring-4 ring-orange-400/50' : ''}`}
+        className={`relative overflow-hidden rounded-xl p-6 text-white transform transition-all duration-300 group ${isUrgent ? 'ring-4 ring-orange-400/50' : containerClasses}`}
         style={{ perspective: '1000px' }}
     >
-      
-      {/* Custom Styles for Animation */}
-      <style>{`
-        @keyframes float {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-8px); }
-        }
-        @keyframes drift {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-30px); }
-        }
-        .animate-float { animation: float 6s ease-in-out infinite; }
-        .animate-drift { animation: drift 15s linear infinite alternate; }
-      `}</style>
-
       {/* Parallax Background Container */}
       <div className={`absolute inset-0 z-0 overflow-hidden transition-colors duration-1000 ${isUrgent ? 'bg-orange-500' : 'bg-sky-500'}`}>
           
-          {/* Layer 1: Sky Gradient (Fixed but rotates slightly) */}
+          {/* Layer 1: Sky Gradient */}
           <div 
             className={`absolute inset-0 opacity-80 transition-transform duration-300 ease-out ${isUrgent ? 'bg-gradient-to-b from-red-600 to-orange-400' : 'bg-gradient-to-b from-indigo-600 to-sky-400'}`} 
             style={{ transform: `scale(1.1) translate(${mousePos.x * -5}px, ${mousePos.y * -5}px)` }}
           />
 
-          {/* Layer 2: Sun / Moon (Moves opposite to mouse) */}
+          {/* Layer 2: Sun / Moon */}
           <div 
             className="absolute inset-0 transition-transform duration-500 ease-out"
             style={{ transform: `translate(${mousePos.x * 15}px, ${mousePos.y * 15}px)` }}
@@ -91,7 +83,7 @@ const Countdown: React.FC<CountdownProps> = ({ targetDate }) => {
              <div className={`absolute top-8 right-12 w-14 h-14 rounded-full mix-blend-overlay animate-float ${isUrgent ? 'bg-yellow-100' : 'bg-white/80'}`}></div>
           </div>
 
-          {/* Layer 3: Clouds/Wind (Moves with mouse slowly) */}
+          {/* Layer 3: Clouds */}
           <div 
              className="absolute top-1/4 left-0 w-full h-full opacity-20 pointer-events-none transition-transform duration-700 ease-out"
              style={{ transform: `translate(${mousePos.x * -10}px, ${mousePos.y * -5}px)` }}
@@ -100,7 +92,7 @@ const Countdown: React.FC<CountdownProps> = ({ targetDate }) => {
              <div className="absolute top-24 left-1/2 w-48 h-1 bg-white rounded-full animate-drift" style={{ animationDelay: '2s' }}></div>
           </div>
 
-          {/* Layer 4: Minimalist Sierras - Back (Moves slightly) */}
+          {/* Layer 4: Sierras Back */}
           <div 
             className={`absolute bottom-0 left-[-10%] right-[-10%] h-48 transition-all duration-100 ease-out ${isUrgent ? 'text-red-800' : 'text-indigo-500'} opacity-70`}
             style={{ transform: `scale(1.1) translate(${mousePos.x * -10}px, ${mousePos.y * -5}px)` }}
@@ -110,7 +102,7 @@ const Countdown: React.FC<CountdownProps> = ({ targetDate }) => {
                </svg>
           </div>
           
-          {/* Layer 5: Minimalist Sierras - Front (Moves more - foreground effect) */}
+          {/* Layer 5: Sierras Front */}
           <div 
             className={`absolute -bottom-4 left-[-10%] right-[-10%] h-40 transition-all duration-100 ease-out ${isUrgent ? 'text-orange-900' : 'text-indigo-800'} opacity-80`}
             style={{ transform: `scale(1.1) translate(${mousePos.x * -20}px, ${mousePos.y * -10}px)` }}
@@ -165,6 +157,6 @@ const Countdown: React.FC<CountdownProps> = ({ targetDate }) => {
       </div>
     </div>
   );
-};
+});
 
 export default Countdown;

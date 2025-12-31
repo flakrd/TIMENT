@@ -1,3 +1,4 @@
+
 import { WEATHER_CODES, TIMEZONE, WorkConfig } from '../constants';
 
 export interface HourlyForecast {
@@ -63,30 +64,66 @@ const getActivityRecommendation = (temp: number, code: number, isWorkTime: boole
   }
 };
 
+// Fallback Mock Data Generator
+const getMockWeather = (config: WorkConfig): WeatherData => {
+  const now = new Date();
+  const currentHour = now.getHours();
+  const isDay = currentHour >= 6 && currentHour < 20;
+  
+  // Create simulated forecast
+  const mockForecast: HourlyForecast[] = [];
+  for(let i=0; i<12; i++) {
+    const h = (currentHour + i) % 24;
+    mockForecast.push({
+      time: new Date(now.getTime() + i * 3600000).toISOString(),
+      temperature: 20 + Math.sin(i) * 5,
+      weatherCode: 1,
+      isDay: h >= 6 && h < 20,
+      hour: h,
+      formattedTime: `${h}:00`
+    });
+  }
+
+  return {
+    temperature: 22,
+    weatherCode: 1,
+    weatherLabel: 'Offline',
+    weatherIcon: '⛅',
+    isDay,
+    locationName: 'Modo Offline',
+    workForecast: mockForecast.filter(f => f.hour >= config.startHour && f.hour < config.endHour).slice(0,5),
+    afterWorkForecast: mockForecast.filter(f => f.hour >= config.endHour || f.hour < config.startHour).slice(0,5),
+    recommendation: {
+      title: 'Sin Conexión',
+      activity: 'No pudimos obtener el clima, pero aprovecha el día igual.',
+      icon: '📡',
+      color: 'bg-gray-100 text-gray-700'
+    }
+  };
+};
+
 export const fetchWeather = async (
   lat: number = DEFAULT_LAT, 
   lon: number = DEFAULT_LON,
   config: WorkConfig
 ): Promise<WeatherData | null> => {
   try {
-    // Validate coordinates to prevent fetch errors with invalid params
     const safeLat = (typeof lat === 'number' && isFinite(lat)) ? lat : DEFAULT_LAT;
     const safeLon = (typeof lon === 'number' && isFinite(lon)) ? lon : DEFAULT_LON;
     
-    // We request timezone=auto so the API returns local time for the coordinates
+    // Explicit timezone provided in constants
     const apiUrl = new URL('https://api.open-meteo.com/v1/forecast');
     apiUrl.searchParams.append('latitude', safeLat.toString());
     apiUrl.searchParams.append('longitude', safeLon.toString());
     apiUrl.searchParams.append('current', 'temperature_2m,is_day,weather_code');
     apiUrl.searchParams.append('hourly', 'temperature_2m,weather_code,is_day');
-    apiUrl.searchParams.append('timezone', 'auto'); 
+    apiUrl.searchParams.append('timezone', TIMEZONE); 
     apiUrl.searchParams.append('forecast_days', '2');
 
     const response = await fetch(apiUrl.toString());
     
     if (!response.ok) {
-        console.error(`Weather API Error: ${response.status}`);
-        return null;
+        throw new Error(`Weather API Error: ${response.status}`);
     }
 
     const data = await response.json();
@@ -96,14 +133,8 @@ export const fetchWeather = async (
     const now = new Date();
     const currentHour = now.getHours();
 
-    // Open-Meteo returns hourly data starting from 00:00 of the requested day (index 0 = 00:00 today)
-    // We can safely assume index matches hour for the first 24h if we are in the same day context provided by API
-    // However, to be safe against timezone shifts, we find the index that matches the current hour closer
-    
     // Find the index in hourly.time that matches the current hour
-    let startIndex = -1;
-    
-    // Robust search: find the timestamp closest to now
+    let startIndex = 0;
     const nowTime = now.getTime();
     let minDiff = Infinity;
     
@@ -115,8 +146,6 @@ export const fetchWeather = async (
             startIndex = i;
         }
     }
-
-    if (startIndex === -1) startIndex = 0;
 
     const workForecast: HourlyForecast[] = [];
     const afterWorkForecast: HourlyForecast[] = [];
@@ -150,10 +179,7 @@ export const fetchWeather = async (
     }
 
     const codeInfo = WEATHER_CODES[current.weather_code] || { label: 'Desconocido', icon: '❓' };
-    // Hardcoded label as we are strictly using Cordoba
     const locationLabel = "Córdoba Capital";
-
-    // Calculate Recommendation based on current status
     const isWorkingNow = currentHour >= config.startHour && currentHour < config.endHour;
     const recommendation = getActivityRecommendation(current.temperature_2m, current.weather_code, isWorkingNow);
 
@@ -169,7 +195,8 @@ export const fetchWeather = async (
       recommendation
     };
   } catch (error) {
-    console.error("Error fetching weather:", error);
-    return null;
+    console.warn("Error fetching weather, falling back to mock data.", error);
+    // Return mock data so the UI doesn't break
+    return getMockWeather(config);
   }
 };

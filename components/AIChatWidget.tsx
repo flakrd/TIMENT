@@ -12,6 +12,8 @@ interface AIChatWidgetProps {
   now: Date;
   vacationDate: Date;
   weather: WeatherData | null;
+  title?: string;
+  isRestMode: boolean; // Received from App
 }
 
 interface Message {
@@ -19,15 +21,13 @@ interface Message {
   text: string;
 }
 
-const AIChatWidget: React.FC<AIChatWidgetProps> = ({ workConfig, dailyStats, now, vacationDate, weather }) => {
-  // Load initial state from localStorage if available
+const AIChatWidget: React.FC<AIChatWidgetProps> = ({ workConfig, dailyStats, now, vacationDate, weather, title = "Chatbot", isRestMode }) => {
   const [messages, setMessages] = useState<Message[]>(() => {
     if (typeof window !== 'undefined') {
         try {
-            const saved = localStorage.getItem('chat_history');
+            const saved = localStorage.getItem('gemini_chat_history');
             return saved ? JSON.parse(saved) : [];
         } catch (e) {
-            console.error("Failed to load chat history", e);
             return [];
         }
     }
@@ -38,12 +38,11 @@ const AIChatWidget: React.FC<AIChatWidgetProps> = ({ workConfig, dailyStats, now
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Initialize AI client
+  // Initialize Gemini
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-  // Save to localStorage whenever messages change
   useEffect(() => {
-    localStorage.setItem('chat_history', JSON.stringify(messages));
+    localStorage.setItem('gemini_chat_history', JSON.stringify(messages));
   }, [messages]);
 
   useEffect(() => {
@@ -52,185 +51,130 @@ const AIChatWidget: React.FC<AIChatWidgetProps> = ({ workConfig, dailyStats, now
     }
   }, [messages, isLoading]);
 
+  const clearHistory = () => {
+    setMessages([]);
+    localStorage.removeItem('gemini_chat_history');
+  };
+
   const getSystemContext = () => {
-    // Gather data from LocalStorage for TrackerWidget context
-    const coffees = localStorage.getItem('tracker_coffees') || '0';
-    const water = localStorage.getItem('tracker_water') || '0';
-    const poops = localStorage.getItem('tracker_poops') || '0';
-    const tasks = JSON.parse(localStorage.getItem('tracker_tasks') || '[]');
-    const pendingTasks = tasks.filter((t: any) => !t.completed).map((t: any) => t.text).join(', ');
-
-    // Calculate vacation based on dynamic prop
-    const daysToVacation = Math.ceil((vacationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-
-    // Weather Context
-    let weatherCtx = "No disponible";
-    if (weather) {
-        weatherCtx = `${weather.temperature}°C, ${weather.weatherLabel} (${weather.recommendation.title}: ${weather.recommendation.activity})`;
-    }
-
     return `
-      Eres el asistente IA del dashboard "TIEMPON'T".
+      Eres un compañero inteligente integrado en el dashboard "TIEMPON'T".
       
-      Datos actuales del usuario:
-      - Hora actual: ${now.toLocaleTimeString('es-AR')}
-      - Fecha: ${now.toLocaleDateString('es-AR')}
-      - Configuración laboral: ${workConfig.startHour}:00 a ${workConfig.endHour}:00
-      - Progreso del día laboral: ${dailyStats.percentage.toFixed(1)}% (${dailyStats.statusText})
-      - Días para vacaciones: ${daysToVacation} (Fecha objetivo: ${vacationDate.toLocaleDateString('es-AR')})
-      - Clima actual: ${weatherCtx}
+      ESTADO ACTUAL DEL USUARIO:
+      - Hora: ${now.toLocaleTimeString()} (${isRestMode ? 'Tiempo Libre' : 'Horario Laboral'}).
+      - Progreso del día: ${dailyStats.percentage.toFixed(0)}%.
+      - Clima: ${weather ? weather.temperature + '°C' : 'Desconocido'}.
       
-      Signos vitales (hoy):
-      - Cafés: ${coffees}
-      - Agua: ${water}
-      - Idas al baño: ${poops}
+      TU PERSONALIDAD Y OBJETIVOS:
+      1. **Versatilidad**: Adapta tu tono. Si el usuario quiere desahogarse sobre el trabajo, sé empático y escucha. Si tiene curiosidad intelectual, sé profundo y detallado. Si necesita ayuda laboral, sé eficiente y profesional.
+      2. **Conversacional**: No suenes robótico. Usa un tono natural, a veces con un toque de humor si la situación lo amerita.
+      3. **Distracción Saludable**: Si el usuario parece agobiado, ofrécele un dato curioso, una perspectiva diferente o una breve charla para despejar la mente.
+      4. **Asistente Profundo**: Tienes la capacidad de razonamiento de Gemini 3 Pro. Úsala para resolver dudas complejas.
       
-      Tareas pendientes (Checklist): ${pendingTasks || 'Ninguna'}
-      
-      Instrucciones:
-      - Responde de manera concisa y extremadamente rápida.
-      - Usa un tono con humor sarcástico, existencialista o motivacional (estilo "Work-Life Balance").
-      - Si el usuario pregunta "qué debo hacer", básate en el progreso del día, el clima y las tareas.
-      - Usa emojis para dar vida a la respuesta.
+      Responde de manera concisa pero completa. Evita saludos repetitivos.
     `;
   };
 
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!input.trim() || isLoading) return;
-
+    
     const userMsg = input;
     setInput('');
     setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
     setIsLoading(true);
 
     try {
-      const systemInstruction = getSystemContext();
-      
-      // Using the specific requested model for low latency
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-lite',
+        model: 'gemini-3-pro-preview',
         contents: [
-            ...messages.slice(-10).map(m => ({ // Keep last 10 messages for context window efficiency
-                role: m.role,
-                parts: [{ text: m.text }]
-            })),
+            ...messages.slice(-10).map(m => ({ role: m.role, parts: [{ text: m.text }] })), // Keep context manageable
             { role: 'user', parts: [{ text: userMsg }] }
         ],
-        config: {
-          systemInstruction: systemInstruction,
+        config: { 
+            systemInstruction: getSystemContext(),
         }
       });
-
+      
       const text = response.text;
-      if (text) {
-        setMessages(prev => [...prev, { role: 'model', text }]);
-      }
+      if (text) setMessages(prev => [...prev, { role: 'model', text }]);
     } catch (error) {
-      console.error("AI Error:", error);
-      setMessages(prev => [...prev, { role: 'model', text: "😵 Error de conexión con la Matrix. Intenta de nuevo." }]);
+      console.error(error);
+      setMessages(prev => [...prev, { role: 'model', text: "Hubo un error de conexión. Intenta de nuevo." }]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const clearHistory = () => {
-    setMessages([]);
-    localStorage.removeItem('chat_history');
-  };
-
   return (
-    <div className="bg-white/90 backdrop-blur rounded-2xl shadow-xl shadow-slate-200/50 p-6 border border-white h-[400px] flex flex-col transition-all hover:border-indigo-200">
-       <style>{`
-          @keyframes slideInRight {
-            from { opacity: 0; transform: translateX(20px); }
-            to { opacity: 1; transform: translateX(0); }
-          }
-          @keyframes slideInLeft {
-            from { opacity: 0; transform: translateX(-20px); }
-            to { opacity: 1; transform: translateX(0); }
-          }
-          .msg-user { animation: slideInRight 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
-          .msg-model { animation: slideInLeft 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
-       `}</style>
-
-       <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2 shrink-0">
+    <div className={`backdrop-blur-xl rounded-3xl shadow-xl border h-[500px] flex flex-col overflow-hidden relative group transition-all duration-500 ${isRestMode ? 'bg-slate-900/80 border-slate-700/50 ring-1 ring-white/10' : 'bg-white/90 ring-1 ring-slate-900/5 border-white'}`}>
+       {/* Header */}
+       <div className={`flex items-center justify-between px-6 py-4 border-b ${isRestMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-100 bg-white/50'}`}>
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-lg shadow-md animate-pulse">
-                ✨
+            <div className={`p-2 rounded-xl shadow-lg ${isRestMode ? 'bg-indigo-900/50 text-indigo-300' : 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-indigo-500/20'}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
             </div>
             <div>
-                <h3 className="text-lg font-bold text-slate-800">TIEMPON'T AI</h3>
-                <p className="text-[10px] text-slate-500 font-medium">Asistente de Productividad (Beta)</p>
+                <h3 className={`text-base font-black tracking-tight ${isRestMode ? 'text-white' : 'text-slate-800'}`}>{title}</h3>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Gemini 3 Pro Preview</p>
             </div>
           </div>
-          {messages.length > 0 && (
-            <button 
-                onClick={clearHistory}
-                className="text-xs text-slate-400 hover:text-red-500 transition-colors"
-                title="Borrar historial"
-            >
-                🗑️
-            </button>
-          )}
+          <button onClick={clearHistory} className="text-slate-400 hover:text-red-500 transition-colors p-2" title="Borrar historial">
+             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+          </button>
        </div>
 
-       <div className="flex-1 overflow-y-auto mb-4 space-y-4 pr-2 scrollbar-thin scrollbar-thumb-slate-200 min-h-0" ref={scrollRef}>
+       {/* Chat Area */}
+       <div className={`flex-1 overflow-y-auto p-4 space-y-6 ${isRestMode ? 'bg-slate-950/30' : 'bg-slate-50/50'}`} ref={scrollRef}>
           {messages.length === 0 && (
-              <div className="text-center text-slate-400 text-sm mt-12 flex flex-col items-center gap-2">
-                  <span className="text-4xl">🤖</span>
-                  <p className="max-w-[200px]">Pregunta sobre tu progreso, tus cafés, el clima o cuánto falta para huir.</p>
+              <div className="flex flex-col items-center justify-center h-full text-center text-slate-400 opacity-60">
+                  <span className="text-4xl mb-2">💬</span>
+                  <p className="text-sm font-medium">¿En qué piensas? Hablemos.</p>
               </div>
           )}
           {messages.map((m, i) => (
               <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`
-                      max-w-[85%] px-4 py-2.5 text-sm shadow-sm leading-relaxed relative
-                      ${m.role === 'user' 
-                          ? 'msg-user bg-blue-600 text-white rounded-2xl rounded-tr-none' 
-                          : 'msg-model bg-gray-100 text-gray-800 rounded-2xl rounded-tl-none'
-                      }
-                  `}>
+                  <div className={`max-w-[85%] px-5 py-3 text-sm shadow-sm leading-relaxed relative ${
+                      m.role === 'user' 
+                      ? 'bg-indigo-600 text-white rounded-2xl rounded-tr-none' 
+                      : (isRestMode ? 'bg-slate-800 text-slate-200 border-slate-700' : 'bg-white text-slate-700 border-slate-200') + ' rounded-2xl rounded-tl-none border shadow-sm'
+                  }`}>
                       {m.text}
-                      {/* Tail CSS simulation */}
-                      <div className={`absolute top-0 w-0 h-0 border-solid 
-                          ${m.role === 'user' 
-                            ? 'right-[-8px] border-t-[0px] border-r-[0px] border-b-[10px] border-l-[10px] border-l-blue-600 border-t-transparent border-r-transparent border-b-transparent' 
-                            : 'left-[-8px] border-t-[0px] border-l-[0px] border-b-[10px] border-r-[10px] border-r-gray-100 border-t-transparent border-l-transparent border-b-transparent'
-                          }`}
-                      ></div>
                   </div>
               </div>
           ))}
           {isLoading && (
-              <div className="flex justify-start msg-model">
-                  <div className="bg-gray-100 border border-slate-100 rounded-2xl rounded-tl-none px-4 py-3 shadow-sm flex gap-1 items-center h-10">
-                      <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
-                      <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-75"></span>
-                      <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-150"></span>
+              <div className="flex justify-start">
+                  <div className={`px-4 py-3 rounded-2xl rounded-tl-none border shadow-sm flex gap-1 ${isRestMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                      <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-75"></div>
+                      <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-150"></div>
                   </div>
               </div>
           )}
        </div>
 
-       <form onSubmit={handleSend} className="relative shrink-0">
-          <input 
-            type="text" 
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Escribe tu consulta..."
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-4 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all shadow-inner"
-          />
-          <button 
-            type="submit" 
-            disabled={!input.trim() || isLoading}
-            className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1.5 bg-indigo-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-indigo-700 transition-colors shadow-sm"
-          >
-             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-             </svg>
-          </button>
-       </form>
+       {/* Input Area */}
+       <div className={`p-4 border-t relative ${isRestMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+          <form onSubmit={handleSend} className="relative flex items-center gap-2">
+              <input 
+                type="text" 
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Escribe un mensaje..."
+                className={`w-full border-none rounded-xl py-3 pl-4 pr-12 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-inner ${isRestMode ? 'bg-slate-950 text-white focus:bg-slate-900' : 'bg-slate-100 text-slate-800 hover:bg-slate-50 focus:bg-white'}`}
+              />
+              <button 
+                type="submit" 
+                disabled={isLoading || !input.trim()}
+                className="absolute right-2 p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:hover:bg-indigo-600 transition-all shadow-md"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                </svg>
+              </button>
+          </form>
+       </div>
     </div>
   );
 };
