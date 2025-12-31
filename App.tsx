@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   getCordobaTime, 
   isWorkDay, 
@@ -47,18 +47,25 @@ const App: React.FC = () => {
   }, []);
 
   // Weather Fetching Logic
-  const handleLoadWeather = async () => {
+  const handleLoadWeather = useCallback(async () => {
     setLoadingWeather(true);
-    const data = await fetchWeather(undefined, undefined, workConfig);
-    setWeather(data);
-    setLoadingWeather(false);
-  };
+
+    try {
+      const data = await fetchWeather(undefined, undefined, workConfig);
+      setWeather(data);
+    } catch (error) {
+      console.error('Error al cargar el clima', error);
+      setWeather(null);
+    } finally {
+      setLoadingWeather(false);
+    }
+  }, [workConfig]);
 
   useEffect(() => {
     handleLoadWeather();
     const interval = setInterval(handleLoadWeather, 1000 * 60 * 15); // Update every 15 mins
     return () => clearInterval(interval);
-  }, [workConfig]);
+  }, [handleLoadWeather]);
 
   // Save settings
   const handleSaveSettings = (newConfig: WorkConfig, newVacationDate: Date) => {
@@ -80,34 +87,31 @@ const App: React.FC = () => {
   }, []);
 
   // Daily Progress Logic
-  const getDailyProgress = () => {
+  const dailyStats = useMemo(() => {
     const isWorkingDay = isWorkDay(now, workConfig);
     const isHolidayToday = isHoliday(now);
-    
+
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
-    
-    // Create Date objects for today's work start and end
+
     const start = new Date(now);
     start.setHours(workConfig.startHour, 0, 0, 0);
-    
+
     const end = new Date(now);
     end.setHours(workConfig.endHour, 0, 0, 0);
 
-    const totalWorkMinutes = (workConfig.endHour - workConfig.startHour) * 60;
+    const totalWorkMinutes = Math.max((workConfig.endHour - workConfig.startHour) * 60, 1);
     const elapsedMinutes = (currentHour * 60 + currentMinute) - (workConfig.startHour * 60);
-    
+
     let statusText = "";
     let percentage = 0;
-    let colorClass = "bg-gray-400"; 
-    
-    // Check if we are strictly inside the working hours configured
+    let colorClass = "bg-gray-400";
+
     const isInsideWorkHours = now >= start && now <= end;
 
     if (isInsideWorkHours) {
-        // Force calculation based on time if inside hours
         percentage = (elapsedMinutes / totalWorkMinutes) * 100;
-        colorClass = "bg-orange-500"; // Consistently orange
+        colorClass = "bg-orange-500";
 
         if (isHolidayToday) {
             statusText = "Feriado (Horario de Oficina)";
@@ -117,7 +121,6 @@ const App: React.FC = () => {
             statusText = "En plena Jornada Laboral.";
         }
     } else {
-        // Standard logic for outside hours
         if (isHolidayToday) {
             statusText = "¡Es Feriado! Disfruta tu libertad.";
             percentage = 100;
@@ -137,20 +140,21 @@ const App: React.FC = () => {
         }
     }
 
-    return { percentage, statusText, colorClass };
-  };
+    return {
+      percentage: Math.min(Math.max(percentage, 0), 100),
+      statusText,
+      colorClass,
+    };
+  }, [now, workConfig]);
 
-  const dailyStats = getDailyProgress();
+  const weekStart = useMemo(() => getStartOfWeek(now), [now]);
+  const weekEnd = useMemo(() => getEndOfWeek(now), [now]);
 
-  // Periods
-  const weekStart = getStartOfWeek(now);
-  const weekEnd = getEndOfWeek(now);
+  const monthStart = useMemo(() => getStartOfMonth(now), [now]);
+  const monthEnd = useMemo(() => getEndOfMonth(now), [now]);
 
-  const monthStart = getStartOfMonth(now);
-  const monthEnd = getEndOfMonth(now);
-
-  const yearStart = getStartOfYear(now);
-  const yearEnd = getEndOfYear(now);
+  const yearStart = useMemo(() => getStartOfYear(now), [now]);
+  const yearEnd = useMemo(() => getEndOfYear(now), [now]);
 
   return (
     // Fondo oscurecido para mayor contraste

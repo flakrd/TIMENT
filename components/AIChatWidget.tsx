@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { WorkConfig } from '../constants';
 import { WeatherData } from '../utils/weatherService';
@@ -20,6 +20,9 @@ interface Message {
 }
 
 const AIChatWidget: React.FC<AIChatWidgetProps> = ({ workConfig, dailyStats, now, vacationDate, weather }) => {
+  const apiKey = (import.meta.env.GEMINI_API_KEY as string | undefined)
+    ?? (import.meta.env.VITE_GEMINI_API_KEY as string | undefined);
+
   // Load initial state from localStorage if available
   const [messages, setMessages] = useState<Message[]>(() => {
     if (typeof window !== 'undefined') {
@@ -39,10 +42,18 @@ const AIChatWidget: React.FC<AIChatWidgetProps> = ({ workConfig, dailyStats, now
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Initialize AI client
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = useMemo(() => {
+    if (!apiKey) return null;
+    return new GoogleGenAI({ apiKey });
+  }, [apiKey]);
 
   // Save to localStorage whenever messages change
   useEffect(() => {
+    if (messages.length > 50) {
+      setMessages((prev) => prev.slice(-50));
+      return;
+    }
+
     localStorage.setItem('chat_history', JSON.stringify(messages));
   }, [messages]);
 
@@ -52,7 +63,14 @@ const AIChatWidget: React.FC<AIChatWidgetProps> = ({ workConfig, dailyStats, now
     }
   }, [messages, isLoading]);
 
-  const getSystemContext = () => {
+  const appendMessage = useCallback((message: Message) => {
+    setMessages((prev) => {
+      const next = [...prev, message];
+      return next.length > 50 ? next.slice(-50) : next;
+    });
+  }, []);
+
+  const getSystemContext = useCallback(() => {
     // Gather data from LocalStorage for TrackerWidget context
     const coffees = localStorage.getItem('tracker_coffees') || '0';
     const water = localStorage.getItem('tracker_water') || '0';
@@ -93,25 +111,29 @@ const AIChatWidget: React.FC<AIChatWidgetProps> = ({ workConfig, dailyStats, now
       - Si el usuario pregunta "qué debo hacer", básate en el progreso del día, el clima y las tareas.
       - Usa emojis para dar vida a la respuesta.
     `;
-  };
+  }, [dailyStats.percentage, dailyStats.statusText, now, vacationDate, weather, workConfig.endHour, workConfig.startHour]);
 
-  const handleSend = async (e?: React.FormEvent) => {
+  const handleSend = useCallback(async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!input.trim() || isLoading) return;
 
+    if (!ai) {
+      appendMessage({ role: 'model', text: '🔑 Agrega tu clave GEMINI_API_KEY en el archivo .env.local para chatear.' });
+      return;
+    }
+
     const userMsg = input;
     setInput('');
-    setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+    appendMessage({ role: 'user', text: userMsg });
     setIsLoading(true);
 
     try {
       const systemInstruction = getSystemContext();
-      
-      // Using the specific requested model for low latency
+
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-lite',
         contents: [
-            ...messages.slice(-10).map(m => ({ // Keep last 10 messages for context window efficiency
+            ...messages.slice(-10).map(m => ({
                 role: m.role,
                 parts: [{ text: m.text }]
             })),
@@ -122,17 +144,18 @@ const AIChatWidget: React.FC<AIChatWidgetProps> = ({ workConfig, dailyStats, now
         }
       });
 
-      const text = response.text;
-      if (text) {
-        setMessages(prev => [...prev, { role: 'model', text }]);
-      }
+      const text = typeof response?.response?.text === 'function'
+        ? response.response.text()
+        : (response as any)?.text;
+
+      appendMessage({ role: 'model', text: text || '🤖 No recibí respuesta. Intentemos de nuevo.' });
     } catch (error) {
       console.error("AI Error:", error);
-      setMessages(prev => [...prev, { role: 'model', text: "😵 Error de conexión con la Matrix. Intenta de nuevo." }]);
+      appendMessage({ role: 'model', text: "😵 Error de conexión con la Matrix. Intenta de nuevo." });
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [ai, appendMessage, getSystemContext, input, isLoading, messages]);
 
   const clearHistory = () => {
     setMessages([]);
@@ -154,8 +177,8 @@ const AIChatWidget: React.FC<AIChatWidgetProps> = ({ workConfig, dailyStats, now
           .msg-model { animation: slideInLeft 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
        `}</style>
 
-       <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2 shrink-0">
-          <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2 shrink-0">
+         <div className="flex items-center gap-3">
             <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-lg shadow-md animate-pulse">
                 ✨
             </div>
@@ -174,6 +197,12 @@ const AIChatWidget: React.FC<AIChatWidgetProps> = ({ workConfig, dailyStats, now
             </button>
           )}
        </div>
+
+       {!ai && (
+          <div className="mb-3 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 font-medium">
+            Agrega tu clave <span className="font-bold">GEMINI_API_KEY</span> en <code>.env.local</code> para habilitar el chat.
+          </div>
+       )}
 
        <div className="flex-1 overflow-y-auto mb-4 space-y-4 pr-2 scrollbar-thin scrollbar-thumb-slate-200 min-h-0" ref={scrollRef}>
           {messages.length === 0 && (
@@ -214,16 +243,16 @@ const AIChatWidget: React.FC<AIChatWidgetProps> = ({ workConfig, dailyStats, now
        </div>
 
        <form onSubmit={handleSend} className="relative shrink-0">
-          <input 
-            type="text" 
+          <input
+            type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Escribe tu consulta..."
             className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-4 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all shadow-inner"
           />
-          <button 
-            type="submit" 
-            disabled={!input.trim() || isLoading}
+          <button
+            type="submit"
+            disabled={!input.trim() || isLoading || !ai}
             className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1.5 bg-indigo-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-indigo-700 transition-colors shadow-sm"
           >
              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
