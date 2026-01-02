@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   getCordobaTime, 
   isWorkDay, 
@@ -21,6 +21,7 @@ import SettingsModal from './components/SettingsModal';
 import AIChatWidget from './components/AIChatWidget';
 import NanoBananaWidget from './components/NanoBananaWidget';
 import RestTracker from './components/RestTracker';
+import LoginForm from './components/LoginForm';
 
 const App: React.FC = () => {
   const [now, setNow] = useState<Date>(getCordobaTime());
@@ -28,6 +29,9 @@ const App: React.FC = () => {
   const [uiConfig, setUIConfig] = useState<UIConfig>(DEFAULT_UI_CONFIG);
   const [vacationDate, setVacationDate] = useState<Date>(new Date(VACATION_DATE_STR));
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [user, setUser] = useState<string | null>(null);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   
   // Edit Mode State
   const [isEditMode, setIsEditMode] = useState(false);
@@ -59,6 +63,9 @@ const App: React.FC = () => {
 
     const savedVacation = localStorage.getItem('app_vacation_date');
     if (savedVacation) setVacationDate(new Date(savedVacation));
+
+    const savedUser = localStorage.getItem('app_user_name');
+    if (savedUser) setUser(savedUser);
   }, []);
 
   // Save Config on Change
@@ -332,6 +339,48 @@ const App: React.FC = () => {
       );
   };
 
+  const clearLoginError = () => setLoginError(null);
+
+  const handleLogin = ({ username, password }: { username: string, password: string }) => {
+    setLoginError(null);
+    setIsLoggingIn(true);
+
+    setTimeout(() => {
+      if (!username.trim() || !password.trim()) {
+        setLoginError('Completá usuario y contraseña.');
+        setIsLoggingIn(false);
+        return;
+      }
+
+      const trimmedUser = username.trim();
+      setUser(trimmedUser);
+      localStorage.setItem('app_user_name', trimmedUser);
+      setIsLoggingIn(false);
+    }, 350);
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem('app_user_name');
+  };
+
+  if (!user) {
+    return (
+      <div className={`min-h-screen transition-colors duration-1000 font-sans selection:bg-indigo-200 pb-12 overflow-x-hidden ${isRestMode ? 'text-slate-100' : 'text-slate-900'}`}>
+        {renderBackground()}
+        <div className="relative z-10 min-h-screen flex items-center justify-center px-4">
+          <LoginForm
+            onLogin={handleLogin}
+            loading={isLoggingIn}
+            error={loginError}
+            isRestMode={isRestMode}
+            onClearError={clearLoginError}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen transition-colors duration-1000 font-sans selection:bg-indigo-200 pb-12 overflow-x-hidden ${isRestMode ? 'text-slate-100' : 'text-slate-900'}`}>
       
@@ -361,7 +410,23 @@ const App: React.FC = () => {
                     Modo Edición Activo
                 </div>
             )}
-            
+
+            <div className={`flex items-center gap-3 px-4 py-2 rounded-2xl border shadow-sm transition-colors ${isRestMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-800'}`}>
+              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-lg ${isRestMode ? 'bg-indigo-700 text-white' : 'bg-indigo-100 text-indigo-700'}`}>
+                {user?.charAt(0)?.toUpperCase()}
+              </div>
+              <div className="leading-tight">
+                <p className={`text-[10px] font-bold uppercase tracking-widest ${isRestMode ? 'text-slate-400' : 'text-slate-500'}`}>Sesión Activa</p>
+                <p className="font-black text-sm">{user}</p>
+              </div>
+              <button
+                onClick={handleLogout}
+                className={`text-xs font-bold px-3 py-1 rounded-full transition ${isRestMode ? 'bg-slate-700 hover:bg-indigo-700 text-slate-100' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}
+              >
+                Salir
+              </button>
+            </div>
+
             <WeatherWidget weather={weather} loading={loadingWeather} onRetry={handleLoadWeather} isRestMode={isRestMode} />
             
             {/* Edit Mode Toggle */}
