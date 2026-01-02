@@ -1,6 +1,6 @@
 
 export const TIMEZONE = 'America/Argentina/Cordoba';
-export const VACATION_DATE_STR = "2026-01-12T00:00:00";
+export const VACATION_DATE_STR = "2026-01-12T00:00:00"; // Restaurado a 12/01/2026
 
 export type BackgroundTheme = 'minimal' | 'dynamic' | 'geometric' | 'custom';
 
@@ -31,7 +31,7 @@ export const DEFAULT_WORK_CONFIG: WorkConfig = {
 };
 
 // Configuración de Módulos (UI)
-export type ModuleId = 'week' | 'tracker' | 'month' | 'year' | 'countdown' | 'ai' | 'nano';
+export type ModuleId = 'week' | 'tracker' | 'month' | 'year' | 'countdown' | 'ai' | 'nano' | 'maps';
 export type ModuleSize = 'normal' | 'wide'; // normal = 1 col, wide = 2 cols (full width)
 
 export interface UIConfig {
@@ -39,19 +39,21 @@ export interface UIConfig {
   rightColumn: ModuleId[];
   titles: Record<ModuleId, string>;
   sizes: Record<ModuleId, ModuleSize>;
+  minimized: ModuleId[]; // Nuevo: Lista de módulos colapsados
 }
 
 export const DEFAULT_UI_CONFIG: UIConfig = {
   leftColumn: ['week', 'tracker'],
-  rightColumn: ['month', 'year', 'countdown', 'ai', 'nano'],
+  rightColumn: ['maps', 'month', 'year', 'countdown', 'ai', 'nano'],
   titles: {
     week: 'Esta Semana',
     tracker: 'Rastreador',
     month: 'Este Mes',
-    year: 'Año 2025',
-    countdown: 'Vacaciones',
+    year: 'Año 2026',
+    countdown: 'Vacaciones 2026',
     ai: 'Chatbot Gemini 3',
-    nano: 'Nano Banana Studio'
+    nano: 'Nano Banana Studio',
+    maps: 'Ruta de Salida'
   },
   sizes: {
     week: 'wide',
@@ -60,13 +62,30 @@ export const DEFAULT_UI_CONFIG: UIConfig = {
     year: 'normal',
     countdown: 'normal',
     ai: 'wide',
-    nano: 'wide'
-  }
+    nano: 'wide',
+    maps: 'wide'
+  },
+  minimized: [] // Por defecto ninguno minimizado
 };
 
-export const HOLIDAYS_2025 = [
-  '01-01', '03-03', '03-04', '03-24', '04-02', '04-18', '05-01', '05-25', 
-  '06-16', '06-20', '07-09', '08-17', '10-12', '11-20', '12-08', '12-25',
+// Feriados Argentina 2026 (Estimados / Fijos)
+export const HOLIDAYS_2026 = [
+  '01-01', // Año Nuevo
+  '02-16', // Carnaval (Lunes)
+  '02-17', // Carnaval (Martes)
+  '03-24', // Día de la Memoria
+  '04-02', // Malvinas
+  '04-03', // Viernes Santo
+  '05-01', // Día del Trabajador
+  '05-25', // Revolución de Mayo
+  '06-17', // Güemes
+  '06-20', // Día de la Bandera
+  '07-09', // Independencia
+  '08-17', // San Martín
+  '10-12', // Diversidad Cultural
+  '11-20', // Soberanía Nacional
+  '12-08', // Inmaculada Concepción
+  '12-25', // Navidad
 ];
 
 export const WEATHER_CODES: Record<number, { label: string, icon: string }> = {

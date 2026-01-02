@@ -14,6 +14,7 @@ interface AIChatWidgetProps {
   weather: WeatherData | null;
   title?: string;
   isRestMode: boolean; // Received from App
+  isDarkMode?: boolean;
 }
 
 interface Message {
@@ -21,7 +22,7 @@ interface Message {
   text: string;
 }
 
-const AIChatWidget: React.FC<AIChatWidgetProps> = ({ workConfig, dailyStats, now, vacationDate, weather, title = "Chatbot", isRestMode }) => {
+const AIChatWidget: React.FC<AIChatWidgetProps> = ({ workConfig, dailyStats, now, vacationDate, weather, title = "Chatbot", isRestMode, isDarkMode }) => {
   const [messages, setMessages] = useState<Message[]>(() => {
     if (typeof window !== 'undefined') {
         try {
@@ -37,8 +38,9 @@ const AIChatWidget: React.FC<AIChatWidgetProps> = ({ workConfig, dailyStats, now
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  
+  const isDark = isRestMode || isDarkMode;
 
-  // Initialize Gemini
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   useEffect(() => {
@@ -59,19 +61,11 @@ const AIChatWidget: React.FC<AIChatWidgetProps> = ({ workConfig, dailyStats, now
   const getSystemContext = () => {
     return `
       Eres un compañero inteligente integrado en el dashboard "TIEMPON'T".
-      
       ESTADO ACTUAL DEL USUARIO:
       - Hora: ${now.toLocaleTimeString()} (${isRestMode ? 'Tiempo Libre' : 'Horario Laboral'}).
       - Progreso del día: ${dailyStats.percentage.toFixed(0)}%.
       - Clima: ${weather ? weather.temperature + '°C' : 'Desconocido'}.
-      
-      TU PERSONALIDAD Y OBJETIVOS:
-      1. **Versatilidad**: Adapta tu tono. Si el usuario quiere desahogarse sobre el trabajo, sé empático y escucha. Si tiene curiosidad intelectual, sé profundo y detallado. Si necesita ayuda laboral, sé eficiente y profesional.
-      2. **Conversacional**: No suenes robótico. Usa un tono natural, a veces con un toque de humor si la situación lo amerita.
-      3. **Distracción Saludable**: Si el usuario parece agobiado, ofrécele un dato curioso, una perspectiva diferente o una breve charla para despejar la mente.
-      4. **Asistente Profundo**: Tienes la capacidad de razonamiento de Gemini 3 Pro. Úsala para resolver dudas complejas.
-      
-      Responde de manera concisa pero completa. Evita saludos repetitivos.
+      TU PERSONALIDAD: Versátil, Conversacional, Asistente Profundo. Responde conciso.
     `;
   };
 
@@ -88,35 +82,35 @@ const AIChatWidget: React.FC<AIChatWidgetProps> = ({ workConfig, dailyStats, now
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
         contents: [
-            ...messages.slice(-10).map(m => ({ role: m.role, parts: [{ text: m.text }] })), // Keep context manageable
+            ...messages.slice(-10).map(m => ({ role: m.role, parts: [{ text: m.text }] })), 
             { role: 'user', parts: [{ text: userMsg }] }
         ],
-        config: { 
-            systemInstruction: getSystemContext(),
-        }
+        config: { systemInstruction: getSystemContext() }
       });
-      
       const text = response.text;
       if (text) setMessages(prev => [...prev, { role: 'model', text }]);
     } catch (error) {
-      console.error(error);
-      setMessages(prev => [...prev, { role: 'model', text: "Hubo un error de conexión. Intenta de nuevo." }]);
+      setMessages(prev => [...prev, { role: 'model', text: "Error de conexión." }]);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className={`backdrop-blur-xl rounded-3xl shadow-xl border h-[500px] flex flex-col overflow-hidden relative group transition-all duration-500 ${isRestMode ? 'bg-slate-900/80 border-slate-700/50 ring-1 ring-white/10' : 'bg-white/90 ring-1 ring-slate-900/5 border-white'}`}>
-       {/* Header */}
-       <div className={`flex items-center justify-between px-6 py-4 border-b ${isRestMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-100 bg-white/50'}`}>
+    <div className={`backdrop-blur-xl rounded-3xl shadow-xl border h-[500px] flex flex-col overflow-hidden relative group transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl ${isRestMode 
+        ? 'bg-slate-900/80 border-slate-700/50 ring-1 ring-white/10' 
+        : (isDarkMode 
+            ? 'bg-slate-800/90 border-slate-700 ring-1 ring-white/5'
+            : 'bg-white/90 ring-1 ring-slate-900/5 border-white')
+    }`}>
+       <div className={`flex items-center justify-between px-6 py-4 border-b ${isDark ? 'border-slate-800 bg-slate-900/50' : 'border-slate-100 bg-white/50'}`}>
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-xl shadow-lg ${isRestMode ? 'bg-indigo-900/50 text-indigo-300' : 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-indigo-500/20'}`}>
+            <div className={`p-2 rounded-xl transition-colors ${isDark ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-600'}`}>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
             </div>
             <div>
-                <h3 className={`text-base font-black tracking-tight ${isRestMode ? 'text-white' : 'text-slate-800'}`}>{title}</h3>
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Gemini 3 Pro Preview</p>
+                <h3 className={`text-base font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-800'}`}>{title}</h3>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Gemini 3 Pro</p>
             </div>
           </div>
           <button onClick={clearHistory} className="text-slate-400 hover:text-red-500 transition-colors p-2" title="Borrar historial">
@@ -124,8 +118,7 @@ const AIChatWidget: React.FC<AIChatWidgetProps> = ({ workConfig, dailyStats, now
           </button>
        </div>
 
-       {/* Chat Area */}
-       <div className={`flex-1 overflow-y-auto p-4 space-y-6 ${isRestMode ? 'bg-slate-950/30' : 'bg-slate-50/50'}`} ref={scrollRef}>
+       <div className={`flex-1 overflow-y-auto p-4 space-y-6 ${isDark ? 'bg-slate-950/30' : 'bg-slate-50/50'}`} ref={scrollRef}>
           {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full text-center text-slate-400 opacity-60">
                   <span className="text-4xl mb-2">💬</span>
@@ -137,41 +130,23 @@ const AIChatWidget: React.FC<AIChatWidgetProps> = ({ workConfig, dailyStats, now
                   <div className={`max-w-[85%] px-5 py-3 text-sm shadow-sm leading-relaxed relative ${
                       m.role === 'user' 
                       ? 'bg-indigo-600 text-white rounded-2xl rounded-tr-none' 
-                      : (isRestMode ? 'bg-slate-800 text-slate-200 border-slate-700' : 'bg-white text-slate-700 border-slate-200') + ' rounded-2xl rounded-tl-none border shadow-sm'
+                      : (isDark ? 'bg-slate-800 text-slate-200 border-slate-700' : 'bg-white text-slate-700 border-slate-200') + ' rounded-2xl rounded-tl-none border shadow-sm'
                   }`}>
                       {m.text}
                   </div>
               </div>
           ))}
-          {isLoading && (
-              <div className="flex justify-start">
-                  <div className={`px-4 py-3 rounded-2xl rounded-tl-none border shadow-sm flex gap-1 ${isRestMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-                      <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-75"></div>
-                      <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-150"></div>
-                  </div>
-              </div>
-          )}
+          {isLoading && <div className="flex justify-start"><div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></div></div>}
        </div>
 
-       {/* Input Area */}
-       <div className={`p-4 border-t relative ${isRestMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+       <div className={`p-4 border-t relative ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
           <form onSubmit={handleSend} className="relative flex items-center gap-2">
               <input 
-                type="text" 
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Escribe un mensaje..."
-                className={`w-full border-none rounded-xl py-3 pl-4 pr-12 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-inner ${isRestMode ? 'bg-slate-950 text-white focus:bg-slate-900' : 'bg-slate-100 text-slate-800 hover:bg-slate-50 focus:bg-white'}`}
+                type="text" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Escribe un mensaje..."
+                className={`w-full border-none rounded-xl py-3 pl-4 pr-12 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-inner ${isDark ? 'bg-slate-950 text-white focus:bg-slate-900' : 'bg-slate-100 text-slate-800 hover:bg-slate-50 focus:bg-white'}`}
               />
-              <button 
-                type="submit" 
-                disabled={isLoading || !input.trim()}
-                className="absolute right-2 p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:hover:bg-indigo-600 transition-all shadow-md"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-                </svg>
+              <button type="submit" disabled={isLoading || !input.trim()} className="absolute right-2 p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" /></svg>
               </button>
           </form>
        </div>

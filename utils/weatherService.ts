@@ -103,9 +103,9 @@ const getMockWeather = (config: WorkConfig): WeatherData => {
 };
 
 export const fetchWeather = async (
-  lat: number = DEFAULT_LAT, 
-  lon: number = DEFAULT_LON,
-  config: WorkConfig
+  lat?: number, 
+  lon?: number,
+  config: WorkConfig = { startHour: 9, endHour: 17 } as WorkConfig
 ): Promise<WeatherData | null> => {
   try {
     const safeLat = (typeof lat === 'number' && isFinite(lat)) ? lat : DEFAULT_LAT;
@@ -179,7 +179,7 @@ export const fetchWeather = async (
     }
 
     const codeInfo = WEATHER_CODES[current.weather_code] || { label: 'Desconocido', icon: '❓' };
-    const locationLabel = "Córdoba Capital";
+    const locationLabel = (safeLat === DEFAULT_LAT && safeLon === DEFAULT_LON) ? "Córdoba Capital" : "Ubicación Local";
     const isWorkingNow = currentHour >= config.startHour && currentHour < config.endHour;
     const recommendation = getActivityRecommendation(current.temperature_2m, current.weather_code, isWorkingNow);
 

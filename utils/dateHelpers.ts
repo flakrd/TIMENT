@@ -1,5 +1,5 @@
 
-import { HOLIDAYS_2025, TIMEZONE, WorkConfig } from '../constants';
+import { HOLIDAYS_2026, TIMEZONE, WorkConfig } from '../constants';
 
 export const getCordobaTime = (): Date => {
   const now = new Date();
@@ -20,7 +20,7 @@ export const isHoliday = (date: Date): boolean => {
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
   const day = date.getDate().toString().padStart(2, '0');
   const dateStr = `${month}-${day}`;
-  return HOLIDAYS_2025.includes(dateStr);
+  return HOLIDAYS_2026.includes(dateStr);
 };
 
 // Check if a date is a working day based on config
